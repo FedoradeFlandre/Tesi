@@ -14,8 +14,8 @@ parameters = {
     "epsilonA": 0.01,
     "beta1": 0.4e-9,
     #Parametri chemioterapici
-    "alphaA": 0.5e6,
-    "gammaA": 0.3e-9,
+    "alphaA": 0.5e8,
+    "gammaA": 0.3e-8,
     "tau": 2.5
 }
 
@@ -61,11 +61,10 @@ def find_equilibria(beta3_val,p):
                 equilibria.append([float(N), float(np.real(A))])
     return equilibria
 
-equilibrium_1 = find_equilibria (beta3_vals[0], parameters)
-equilibrium_2 = find_equilibria (beta3_vals[1], parameters)
-print ("Equilibrio N1,A1:", equilibrium_1)
-print ("Equilibrio N2,A2:", equilibrium_2)
-
+equilibrium_1 = find_equilibria(beta3_vals[0], parameters)
+equilibrium_2 = find_equilibria(beta3_vals[1], parameters)
+print('Equilibrio 1:', equilibrium_1)
+print('Equilibrio 2:', equilibrium_2)
 def Jacobian_equilibria(N, A, p):
     plocal = p.copy()
     J11 = - plocal["miN"] - plocal["beta1"] * A
@@ -87,7 +86,7 @@ def ODE1(t,y,p):
 def simulatecase1 (beta3_val, p, y0):
     plocal = p.copy()
     plocal["beta3"] = beta3_val
-    sol = solve_ivp (fun=lambda t, y:ODE1 (t, y, plocal), t_span=(0, 2000), y0=y0, method='LSODA')
+    sol = solve_ivp (fun=lambda t, y:ODE1(t, y, plocal), t_span=(0, 2000), y0=y0, method='LSODA')
     return sol
 
 eps = 1e3
@@ -113,17 +112,17 @@ for (N_eq, A_eq) in equilibrium_1:
     else:
         saddle1.append([N_eq,A_eq])
 
-for beta3_val in beta3_vals:
-    a, b, c, beta1_th, beta3_th, Delta, eta, beta1_th_delta = compute_variables(beta3_val, parameters)
-    print("beta1_th_delta: ",beta1_th_delta)
+#for beta3_val in beta3_vals:
+    #a, b, c, beta1_th, beta3_th, Delta, eta, beta1_th_delta = compute_variables(beta3_val, parameters)
+    #print("beta1_th_delta: ",beta1_th_delta)
     # print("beta1_th: ",beta1_th)
-    print("beta3_th: ", beta3_th)
-    # print ("Delta: ", Delta)
-    # print ("a:", a)
+    #print("beta3_th: ", beta3_th)
+    # print("Delta: ", Delta)
+    # print("a:", a)
     # print("b: ", b)
     # print("c:", c)
-    print ("beta1:", parameters["beta1"])
-    print ("beta3:", beta3_val)
+    #print("beta1:", parameters["beta1"])
+    #print("beta3:", beta3_val)
 
 initialconditions = [[0.0, 0.0],
     [0.0, 0.001e8],[0.2e8, 0.2e8],[0.5e8, 0.5e8],[0.82e8, 0.3e8],[0.83e8, 0.12e8],[1.0e8, 0.5e8],[0.1e8, 0.05e8],
@@ -219,105 +218,130 @@ plt.show()
 
 rho = 10
 T = 7
-n = int(4)
-tmax = 105
+S = 365
+doses = [4, 5, 6, 7]
 
-def delta_approx(t, t0, sigma=0.1):
+def delta_approx(t, t0, sigma=0.5):
     return np.exp(-(t-t0)**2/(2*sigma**2))/(sigma * np.sqrt(2*np.pi))
 
-def v_pulse(t, n, T, rho):
-    v = 0
+def v_pulse(t, n, T, rho, sigma=0.5):
+    v = 0.0
     for i in range(1, n + 1):
-        v += rho * delta_approx(t, i * T, sigma=0.1)
+        center = i * T
+        v += rho * delta_approx(t, center, sigma=sigma)
     return v
 
-def ODE2(t, y, p):
+def u_pulse(t, n, S, rho, sigma=0.5, delay=365):
+    u = 0.0
+    for i in range(1, n+1):
+        center = 5 * delay + i * T
+        u += rho * delta_approx(t, center, sigma=sigma)
+    return u
+
+def ODE2(t, y, p, n, sigma=0.5):
     plocal = p.copy()
 
     N = y[0]
     A = y[1]
     D = y[2]
 
-    v = v_pulse(t, n, T, rho)
+    v = v_pulse(t, n, T, rho, sigma=sigma)
+    u = u_pulse(t, n, S, rho, sigma=sigma, delay=365)
     dNdt = plocal["rN"] - plocal["miN"] * N - plocal["beta1"] * N * A - plocal["alphaN"] * plocal["gammaN"] * N * D
     dAdt = plocal["rA"] * A * (1 - A / plocal["KA"]) - plocal["beta3"] * N * A - (plocal["miA"] + plocal["epsilonA"]) * A - plocal["alphaA"] * plocal ["gammaA"] * A * D
-    dDdt = v - plocal["gammaN"] * N * D - plocal["gammaA"] * A * D - plocal["tau"] * D
+    dDdt = v + u - plocal["gammaN"] * N * D - plocal["gammaA"] * A * D - plocal["tau"] * D
     return [dNdt, dAdt, dDdt]
-def find_equilibria_system2(p, beta3_val):
-    """
-    Calcola equilibri del sistema 2 (con D) usando fsolve.
-    Restituisce lista di equilibri [N,A,D].
-    """
+
+def simulatecase2 (beta3_val, p, y0, tmax, n, sigma=0.5):
     plocal = p.copy()
     plocal["beta3"] = beta3_val
-    equilibria2 = []
-
-    # Primo caso: D = 0 (riduce al sistema 1)
-    eq1 = find_equilibria(beta3_val, plocal)
-    for N, A in eq1:
-        equilibria2.append([N, A, 0.0])
-
-    # Secondo caso: D > 0, si prova a risolvere il sistema completo
-    def eq_full(vars):
-        N, A, D = vars
-        rN, miN, beta1, alphaN, gammaN = plocal["rN"], plocal["miN"], plocal["beta1"], plocal["alphaN"], plocal["gammaN"]
-        rA, KA, beta3, miA, epsilonA, alphaA, gammaA, tau = plocal["rA"], plocal["KA"], plocal["beta3"], plocal["miA"], plocal["epsilonA"], plocal["alphaA"], plocal["gammaA"], plocal["tau"]
-        fN = rN - miN*N - beta1*N*A - alphaN*gammaN*N*D
-        fA = rA*A*(1 - A/KA) - beta3*N*A - (miA + epsilonA)*A - alphaA*gammaA*A*D
-        fD = - gammaN*N*D - gammaA*A*D - tau*D
-        return [fN, fA, fD]
-
-    # Prova diversi punti di partenza per trovare eventuali equilibri con D>0
-    guesses = [
-        [eq1[-1][0], eq1[-1][1], 0.1],
-        [eq1[-1][0]*0.9, eq1[-1][1]*0.9, 0.1],
-        [eq1[-1][0]*1.1, eq1[-1][1]*1.1, 0.1]
-    ]
-    for guess in guesses:
-        sol, info, ier, msg = fsolve(eq_full, guess, full_output=True)
-        if ier == 1 and sol[2] > 0:  # sol convergente e D>0
-            # Evitiamo duplicati simili
-            if not any(np.allclose(sol, e, rtol=1e-5, atol=1e-8) for e in equilibria2):
-                equilibria2.append(sol.tolist())
-
-    return equilibria2
-equilibria2 = find_equilibria_system2(parameters, beta3_vals[1])
-print("\nEquilibri sistema 2 (con D) per beta3 =", beta3_vals[1])
-for eq in equilibria2:
-    print("N = {:.2e}, A = {:.2e}, D = {:.2e}".format(eq[0], eq[1], eq[2]))
-def simulatecase2 (beta3_val, p, y0):
-    plocal = p.copy()
-    plocal["beta3"] = beta3_val
-    sol_t, sol_y = [],[]
     y = y0.copy()
-
-    sol = solve_ivp(fun=lambda t, y:ODE2(t, y, plocal), y0 = y,
-                    t_span=(0,tmax),
-                    method ='LSODA')
-    sol_t.extend(sol.t)
-    sol_y.extend(sol.y.T)
-
-    return np.array(sol_t), np.array(sol_y)
+    pulse_times = np.array([i * T for i in range(1, n+1) if i * T <= tmax])
+    base_eval = np.linspace(0, tmax, int(max(3000, tmax * 200)))
+    t_eval=np.unique(np.concatenate([base_eval, pulse_times]))
+    if pulse_times.size> 0:
+        dt = np.diff(t_eval).min() if t_eval.size > 1 else 1e-3
+        eps = max(dt * 0.2, min(0.01, dt))
+        extra = np.unique(np.concatenate([pulse_times - eps, pulse_times + eps]))
+        t_eval = np.unique(np.concatenate([t_eval, extra]))
+    sol = solve_ivp(fun=lambda t, y: ODE2(t, y, plocal, n), y0=y,
+                    t_span=(0, tmax),
+                    t_eval=t_eval,
+                    method='RK45',
+                    rtol=1e-6, atol=1e-9)
+    return sol.t, sol.y.T
 
 P2 = equilibrium_2[2]
-N0 = P2[0]
-A0 = P2[1]
-D0 = 0.0
-y0_ = [N0, A0, D0]
+N0II = P2[0]
+A0II = P2[1]
+D0II = 0.0
+y0_II = [N0II, A0II, D0II]
 
+P3 = equilibrium_1[1]
+N0III = P3[0]
+A0III = P3[1]
+D0III = 0.0
+y0_III = [N0III, A0III, D0III]
+line_styles_dict = {4: '-', 5: '--', 6: ':', 7: '-.'}
 
-sol_t, sol_y = simulatecase2(beta3_vals[1], parameters, y0_)
-fig, ax1 = plt.subplots(figsize=(10,4))
-ax1.plot(sol_t, sol_y[:,0], color='orange', label='N')
-ax1.plot(sol_t, sol_y[:,1], color='green', label='A')
-ax1.set_xlabel('Time')
-ax1.set_ylabel('Cells')
-ax1.grid()
-ax2 = ax1.twinx()
-ax2.plot(sol_t, sol_y[:,2], color='blue', linestyle='--', label='D')
-ax2.set_ylabel('Drug')
+plt.figure(figsize=(12, 5))
+plt.subplot(1, 2, 1)
+plt.grid()
 plt.title('Regime II')
-ax1.legend(loc='upper left')
-ax2.legend(loc='upper right')
+plt.xlabel('Time')
+plt.ylabel('Cells')
+for n in doses:
+    sol_tII, sol_yII = simulatecase2(beta3_vals[1], parameters, y0_II, tmax=150, n=n, sigma=0.5)
+    #print("min(D)=", sol_yII[2, :].min(), "max(D)=", sol_yII[2, :].max(), "num_points=", len(sol_tII))
+    style = line_styles_dict.get(n, '-')
+    plt.plot(sol_tII, sol_yII[:, 0] / 1e8, color='green', linestyle=style, label='N')
+    plt.plot(sol_tII, 4 * sol_yII[:, 1] / 1e8, color='red', linestyle=style, label='A')
+    plt.plot(sol_tII, sol_yII[:, 2] / 10, color='blue', linestyle=style, label='D')
+
+plt.subplot(1, 2, 2)
+plt.grid()
+plt.title('Regime III')
+plt.xlabel('Time')
+plt.ylabel('Cells')
+for n in doses:
+    sol_tIII, sol_yIII = simulatecase2(beta3_vals[0], parameters, y0_III, tmax=150, n=n, sigma=0.5)
+    style = line_styles_dict.get(n, '-')
+    plt.plot(sol_tIII/7, sol_yIII[:, 0] / 1e8, color='green', linestyle=style)
+    plt.plot(sol_tIII/7, 4 * sol_yIII[:, 1] / 1e8, color='red', linestyle=style)
+    plt.plot(sol_tIII/7, sol_yIII[:, 2] / 10, color='blue', linestyle=style)
+plt.scatter([], [], color='green', label='Sane')
+plt.scatter([], [], color='red', label='Cancer')
+plt.scatter([], [], color='blue', label='Drug')
+plt.legend()
+plt.tight_layout()
+plt.show()
+
+plt.figure(figsize=(12, 5))
+plt.subplot(1, 2, 1)
+plt.grid()
+plt.title('Regime II')
+plt.xlabel('Time(years)')
+plt.ylabel('Cells')
+for n in doses:
+    sol_tII, sol_yII = simulatecase2(beta3_vals[1], parameters, y0_II, tmax=7300, n=n, sigma=0.5)
+    style = line_styles_dict.get(n,'-')
+    plt.plot(sol_tII/365, sol_yII[:, 0] / 1e8, color='green', linestyle=style)
+    plt.plot(sol_tII/365, 4 * sol_yII[:, 1] / 1e8, color='red', linestyle=style)
+    plt.plot(sol_tII/365, sol_yII[:, 2] / 10, color='blue', linestyle=style)
+plt.subplot(1, 2, 2)
+plt.grid()
+plt.title('Regime III')
+plt.xlabel('Time(years)')
+plt.ylabel('Cells')
+for n in doses:
+    sol_tIII, sol_yIII = simulatecase2(beta3_vals[0], parameters, y0_III, tmax=7300, n=n, sigma=0.5)
+    style = line_styles_dict.get(n,'-')
+    plt.plot(sol_tIII/365, sol_yIII[:, 0] / 1e8, color='green', linestyle=style)
+    plt.plot(sol_tIII/365, 4 * sol_yIII[:, 1] / 1e8, color='red', linestyle=style)
+    plt.plot(sol_tIII/365, sol_yIII[:, 2] / 10, color='blue', linestyle=style)
+plt.scatter([], [], color='green', label='Sane')
+plt.scatter([], [], color='red', label='Cancer')
+plt.scatter([], [], color='blue', label='Drug')
+plt.legend(loc='upper right')
 plt.tight_layout()
 plt.show()

@@ -65,6 +65,7 @@ equilibrium_1 = find_equilibria(beta3_vals[0], parameters)
 equilibrium_2 = find_equilibria(beta3_vals[1], parameters)
 print('Equilibrio 1:', equilibrium_1)
 print('Equilibrio 2:', equilibrium_2)
+
 def Jacobian_equilibria(N, A, p):
     plocal = p.copy()
     J11 = - plocal["miN"] - plocal["beta1"] * A
@@ -83,10 +84,10 @@ def ODE1(t,y,p):
     dAdt = plocal["rA"] * A * (1 - A / plocal["KA"]) - plocal["beta3"] * N * A - (plocal["miA"] + plocal["epsilonA"]) * A
     return [dNdt, dAdt]
 
-def simulatecase1 (beta3_val, p, y0):
+def simulatecase1 (beta3_val, p, y0, tmax):
     plocal = p.copy()
     plocal["beta3"] = beta3_val
-    sol = solve_ivp (fun=lambda t, y:ODE1(t, y, plocal), t_span=(0, 2000), y0=y0, method='LSODA')
+    sol = solve_ivp(fun=lambda t, y:ODE1(t, y, plocal), t_span=(0, tmax), y0=y0, method='LSODA')
     return sol
 
 eps = 1e3
@@ -128,10 +129,10 @@ initialconditions = [[0.0, 0.0],
     [0.0, 0.001e8],[0.2e8, 0.2e8],[0.5e8, 0.5e8],[0.82e8, 0.3e8],[0.83e8, 0.12e8],[1.0e8, 0.5e8],[0.1e8, 0.05e8],
     [0.1e8, 0.2e8],[0.15e8, 0.1e8],[0.25e8, 0.05e8],[0.3e8, 0.25e8],[0.35e8, 0.15e8],[0.4e8, 0.3e8],[0.45e8, 0.4e8],
     [0.55e8, 0.1e8],[0.6e8, 0.2e8],[0.65e8, 0.35e8],[0.7e8, 0.5e8],[0.75e8, 0.2e8],[0.78e8, 0.1e8],[0.8e8, 0.25e8],
-    [0.85e8, 0.4e8],[0.9e8, 0.6e8],[0.95e8, 0.3e8],[0.98e8, 0.15e8],[1.0e8, 0.1e8]]
+    [0.85e8, 0.4e8],[0.9e8, 0.6e8],[0.95e8, 0.3e8],[0.98e8, 0.15e8],[1.0e8, 0.1e8], [0.3e8, 0.7e8]]
 
 N0 = parameters["rN"]/parameters["miN"]
-initialconditionsA = [[N0 - 0.6e8, 0.6e8], [N0 - 0.07e8, 0.07e8]]
+initialconditionsA = [[N0 - 0.6e8, 0.6e8], [N0 - 0.07e8, 0.07e8], [N0 - 0.9e8, 0.9e8]]
 initialconditionsB = [[N0 - 1, 1], [N0 - 0.07e8, 0.07e8]]
 plt.figure(figsize=(10, 4))
 
@@ -154,7 +155,7 @@ for (N_eq, A_eq) in equilibrium_2:
         plt.scatter(N_eq/1e8, A_eq/1e8, marker='*', color='blue')
 
 for y0 in initialconditions:
-    sol = simulatecase1(beta3_vals[1], parameters, y0)
+    sol = simulatecase1(beta3_vals[1], parameters, y0, tmax=2000)
     plt.plot(sol.y[0]/1e8, sol.y[1]/1e8, color='grey', alpha=0.3)
 plt.scatter([], [], marker='o', color='red', label='Equilibrio stabile')
 plt.scatter([], [], marker='*', color='blue', label='Equilibrio instabile')
@@ -179,7 +180,7 @@ for (N_eq,A_eq) in equilibrium_1:
         plt.scatter(N_eq/1e8, A_eq/1e8, marker='*', color='blue')
 
 for y0 in initialconditions:
-    sol = simulatecase1(beta3_vals[0], parameters, y0)
+    sol = simulatecase1(beta3_vals[0], parameters, y0, tmax=2000)
     plt.plot(sol.y[0]/1e8, sol.y[1]/1e8, color='grey', alpha=0.3)
 plt.scatter([], [], marker='o', color='red', label='Equilibrio stabile')
 plt.scatter([], [], marker='*', color='blue', label='Equilibrio instabile')
@@ -192,8 +193,8 @@ plt.xlabel('Time')
 plt.ylabel("Cells/1e8")
 plt.title('Regime II')
 #Facciamo una prova (con equilibrium 1 e 2 non va)
-for y0 in initialconditions:
-    sol = simulatecase1(beta3_vals[1], parameters, y0)
+for y0 in initialconditionsA:
+    sol = simulatecase1(beta3_vals[1], parameters, y0, tmax=8000)
     plt.plot(sol.t, sol.y[0]/1e8, color='orange')
     plt.plot(sol.t, sol.y[1]/1e8, color='green')
 plt.scatter([], [], color='orange', label='Sane')
@@ -206,8 +207,8 @@ plt.grid()
 plt.xlabel('Time')
 plt.ylabel("Cells/1e8")
 plt.title('Regime III')
-for y0 in initialconditions:
-    sol = simulatecase1(beta3_vals[0], parameters, y0)
+for y0 in initialconditionsB:
+    sol = simulatecase1(beta3_vals[0], parameters, y0, tmax=8000)
     plt.plot(sol.t, sol.y[0]/1e8, color='orange')
     plt.plot(sol.t, sol.y[1]/1e8, color='green')
 plt.scatter([], [], color='orange', label='Sane')
@@ -231,7 +232,7 @@ def v_pulse(t, n, T, rho, sigma=0.5):
         v += rho * delta_approx(t, center, sigma=sigma)
     return v
 
-def u_pulse(t, n, S, rho, sigma=0.5, delay=365):
+def u_pulse(t, n, T, rho, sigma=0.5, delay=365):
     u = 0.0
     for i in range(1, n+1):
         center = 5 * delay + i * T
@@ -246,7 +247,7 @@ def ODE2(t, y, p, n, sigma=0.5):
     D = y[2]
 
     v = v_pulse(t, n, T, rho, sigma=sigma)
-    u = u_pulse(t, n, S, rho, sigma=sigma, delay=365)
+    u = u_pulse(t, n, T, rho, sigma=sigma, delay=365)
     dNdt = plocal["rN"] - plocal["miN"] * N - plocal["beta1"] * N * A - plocal["alphaN"] * plocal["gammaN"] * N * D
     dAdt = plocal["rA"] * A * (1 - A / plocal["KA"]) - plocal["beta3"] * N * A - (plocal["miA"] + plocal["epsilonA"]) * A - plocal["alphaA"] * plocal ["gammaA"] * A * D
     dDdt = v + u - plocal["gammaN"] * N * D - plocal["gammaA"] * A * D - plocal["tau"] * D
@@ -264,7 +265,7 @@ def simulatecase2 (beta3_val, p, y0, tmax, n, sigma=0.5):
         eps = max(dt * 0.2, min(0.01, dt))
         extra = np.unique(np.concatenate([pulse_times - eps, pulse_times + eps]))
         t_eval = np.unique(np.concatenate([t_eval, extra]))
-    sol = solve_ivp(fun=lambda t, y: ODE2(t, y, plocal, n), y0=y,
+    sol = solve_ivp(fun=lambda t, y:ODE2(t, y, plocal, n), y0=y,
                     t_span=(0, tmax),
                     t_eval=t_eval,
                     method='RK45',

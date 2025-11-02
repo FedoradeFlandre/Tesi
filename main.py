@@ -36,10 +36,12 @@ def compute_variables (beta3_val, p):
     if plocal["beta3"] > beta3_th:
         eta = (plocal["rA"] * plocal["rN"] * ((plocal["beta3"] - beta3_th)) / (plocal["KA"] * lA ** 2))
         beta1_th_delta = beta1_th + 2 * eta + 2 * np.sqrt(eta * (beta1_th + eta))  # da capire
+        beta3_th_delta = beta3_th + ((lA ** 2 * (plocal["beta1"] - beta1_th) ** 2)/(4 * plocal["beta1"] * (plocal["rA"]/plocal["KA"]) * plocal["rN"]))
     else:
         eta = np.nan
         beta1_th_delta = np.nan
-    return a, b, c, beta1_th, beta3_th, Delta, eta, beta1_th_delta
+        beta3_th_delta = np.nan
+    return a, b, c, beta1_th, beta3_th, Delta, eta, beta1_th_delta, beta3_th_delta
 
 def find_equilibria(beta3_val,p):
     plocal = p.copy()
@@ -48,9 +50,10 @@ def find_equilibria(beta3_val,p):
     A0 = 0.0
     N0 = plocal["rN"] / plocal["miN"]
     equilibria.append([N0, A0])
-    a, b, c, beta1_th, beta3_th, Delta, eta, beta1_th_delta = compute_variables(beta3_val, plocal)
+    a, b, c, beta1_th, beta3_th, Delta, eta, beta1_th_delta, beta3_th_delta = compute_variables(beta3_val, plocal)
     if Delta < 0:
-        print("Delta negativo")
+        #print("Delta negativo")
+        pass
     else:
         D = np.sqrt(max(Delta,0))
         A1 = (-b - D)/(2 * a)
@@ -112,18 +115,23 @@ for (N_eq, A_eq) in equilibrium_1:
         eq_stabile1.append([N_eq,A_eq])
     else:
         saddle1.append([N_eq,A_eq])
+print ('Eq stabile1:', eq_stabile1)
+print ('Sella1:', saddle1)
+print ('Eq stabile2:', eq_stabile2)
+print ('Sella2:', saddle2)
 
-#for beta3_val in beta3_vals:
-    #a, b, c, beta1_th, beta3_th, Delta, eta, beta1_th_delta = compute_variables(beta3_val, parameters)
-    #print("beta1_th_delta: ",beta1_th_delta)
-    # print("beta1_th: ",beta1_th)
-    #print("beta3_th: ", beta3_th)
-    # print("Delta: ", Delta)
-    # print("a:", a)
-    # print("b: ", b)
-    # print("c:", c)
-    #print("beta1:", parameters["beta1"])
-    #print("beta3:", beta3_val)
+for beta3_val in beta3_vals:
+    a, b, c, beta1_th, beta3_th, Delta, eta, beta1_th_delta, beta3_th_delta = compute_variables(beta3_val, parameters)
+    print("beta1_th_delta: ",beta1_th_delta)
+    print("beta3_th_delta: ",beta3_th_delta)
+    print("beta1_th: ",beta1_th)
+    print("beta3_th: ", beta3_th)
+    print("Delta: ", Delta)
+    print("a:", a)
+    print("b: ", b)
+    print("c:", c)
+    print("beta1:", parameters["beta1"])
+    print("beta3:", beta3_val)
 
 initialconditions = [[0.0, 0.0],
     [0.0, 0.001e8],[0.2e8, 0.2e8],[0.5e8, 0.5e8],[0.82e8, 0.3e8],[0.83e8, 0.12e8],[1.0e8, 0.5e8],[0.1e8, 0.05e8],
@@ -345,4 +353,44 @@ plt.scatter([], [], color='red', label='Cancer')
 plt.scatter([], [], color='blue', label='Drug')
 plt.legend(loc='upper right')
 plt.tight_layout()
+plt.show()
+
+#Grafici di biforcazione
+def compute_bifurcation_plot(beta3_values,p, title="Diagrammi di biforcazione"):
+    rami = {}
+    for beta3_val in beta3_values:
+        equilibria = find_equilibria(beta3_val,p)
+        for i, eq in enumerate(equilibria):
+            N_eq, A_eq = eq
+            plocal=p.copy()
+            plocal["beta3"] = beta3_val
+            J, vals, vect = Jacobian_equilibria(N_eq, A_eq, plocal)
+            stabile = np.all(np.real(vals)< 0)
+            if i not in rami:
+                rami[i]=[]
+            rami[i].append((beta3_val, A_eq, stabile))
+
+    color_list=['blue','red', 'green']
+
+    plt.figure(figsize=(8,5))
+    plt.subplot(2,2,1)
+    for i, ramo in rami.items():
+        ramo_array = np.array(ramo)
+        beta3_vals = ramo_array[:,0]*1e9
+        A_vals = ramo_array[:,1]/1e8
+        stabile_mask =ramo_array[:,2].astype(bool)
+        color=color_list[i%len(color_list)]
+        plt.plot(beta3_vals[stabile_mask], A_vals[stabile_mask], color=color, linestyle='-')
+        plt.plot(beta3_vals[~stabile_mask], A_vals[~stabile_mask], color=color, linestyle='--')
+
+    plt.xlabel("beta3")
+    plt.ylabel("A all'equilibrio")
+    plt.axvline(beta3_th*1e9, color='grey', linestyle='--', linewidth=2)
+    plt.axvline(beta3_th_delta*1e9, color='grey', linestyle='--', linewidth=2)
+
+
+beta3_range = np.linspace(0.25e-9, 0.35e-9, 100)
+compute_bifurcation_plot(beta3_range, parameters, title="Diagramma di biforcazione")
+
+
 plt.show()

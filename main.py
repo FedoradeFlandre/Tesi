@@ -12,7 +12,7 @@ parameters = {
     "KA": 0.75e8,
     "miA": 0.01,
     "epsilonA": 0.01,
-    "beta1": 0.4e-9,
+    #"beta1": 0.4e-9,
     #Parametri chemioterapici
     "alphaA": 0.5e8,
     "gammaA": 0.3e-8,
@@ -22,10 +22,12 @@ parameters = {
 parameters["alphaN"] = 0.6 * parameters["alphaA"]
 parameters["gammaN"] = 0.6 * parameters["gammaA"]
 beta3_vals = [0.28e-9, 0.32e-9]
+beta1 = 0.4e-9
 
-def compute_variables (beta3_val, p):
+def compute_variables (beta3_val, beta1_val, p):
     plocal = p.copy()
     plocal ["beta3"] = beta3_val
+    plocal ["beta1"] = beta1_val
     lA = plocal["rA"] - (plocal["miA"] + plocal["epsilonA"])
     beta1_th = (plocal["miN"] * plocal["rA"]) / (lA * plocal["KA"])
     beta3_th = plocal["miN"] / plocal["rN"] * lA
@@ -35,7 +37,7 @@ def compute_variables (beta3_val, p):
     Delta = b ** 2 - 4 * a * c
     if plocal["beta3"] > beta3_th:
         eta = (plocal["rA"] * plocal["rN"] * ((plocal["beta3"] - beta3_th)) / (plocal["KA"] * lA ** 2))
-        beta1_th_delta = beta1_th + 2 * eta + 2 * np.sqrt(eta * (beta1_th + eta))  # da capire
+        beta1_th_delta = beta1_th + 2 * eta + 2 * np.sqrt(eta * (beta1_th + eta))
         beta3_th_delta = beta3_th + ((lA ** 2 * (plocal["beta1"] - beta1_th) ** 2)/(4 * plocal["beta1"] * (plocal["rA"]/plocal["KA"]) * plocal["rN"]))
     else:
         eta = np.nan
@@ -43,14 +45,15 @@ def compute_variables (beta3_val, p):
         beta3_th_delta = np.nan
     return a, b, c, beta1_th, beta3_th, Delta, eta, beta1_th_delta, beta3_th_delta
 
-def find_equilibria(beta3_val,p):
+def find_equilibria(beta3_val, beta1_val, p):
     plocal = p.copy()
     plocal["beta3"] = beta3_val
+    plocal["beta1"] = beta1_val
     equilibria = []
     A0 = 0.0
     N0 = plocal["rN"] / plocal["miN"]
     equilibria.append([N0, A0])
-    a, b, c, beta1_th, beta3_th, Delta, eta, beta1_th_delta, beta3_th_delta = compute_variables(beta3_val, plocal)
+    a, b, c, beta1_th, beta3_th, Delta, eta, beta1_th_delta, beta3_th_delta = compute_variables(beta3_val, beta1_val, plocal)
     if Delta < 0:
         #print("Delta negativo")
         pass
@@ -64,8 +67,8 @@ def find_equilibria(beta3_val,p):
                 equilibria.append([float(N), float(np.real(A))])
     return equilibria
 
-equilibrium_1 = find_equilibria(beta3_vals[0], parameters)
-equilibrium_2 = find_equilibria(beta3_vals[1], parameters)
+equilibrium_1 = find_equilibria(beta3_vals[0], beta1, parameters)
+equilibrium_2 = find_equilibria(beta3_vals[1], beta1, parameters)
 print('Equilibrio 1:', equilibrium_1)
 print('Equilibrio 2:', equilibrium_2)
 
@@ -87,9 +90,10 @@ def ODE1(t,y,p):
     dAdt = plocal["rA"] * A * (1 - A / plocal["KA"]) - plocal["beta3"] * N * A - (plocal["miA"] + plocal["epsilonA"]) * A
     return [dNdt, dAdt]
 
-def simulatecase1 (beta3_val, p, y0, tmax):
+def simulatecase1 (beta3_val, beta1_val, p, y0, tmax):
     plocal = p.copy()
     plocal["beta3"] = beta3_val
+    plocal["beta1"] = beta1_val #0.4e-9
     sol = solve_ivp(fun=lambda t, y:ODE1(t, y, plocal), t_span=(0, tmax), y0=y0, method='LSODA')
     return sol
 
@@ -99,6 +103,7 @@ eq_stabile2, saddle2, saddlepoint2 = [], [], []
 for (N_eq, A_eq) in equilibrium_2:
     plocal = parameters.copy()
     plocal["beta3"] = beta3_vals[1]
+    plocal["beta1"] = beta1
     J, vals, vects = Jacobian_equilibria(N_eq, A_eq, plocal)
     if np.all((np.real(vals)) < 0):
         eq_stabile2.append([N_eq,A_eq])
@@ -110,18 +115,20 @@ eq_stabile1, saddle1, saddlepoint1 = [], [], []
 for (N_eq, A_eq) in equilibrium_1:
     plocal = parameters.copy()
     plocal["beta3"] = beta3_vals[0]
+    plocal["beta1"] = beta1
     J,vals, vects = Jacobian_equilibria(N_eq, A_eq, plocal)
     if np.all((np.real(vals) < 0)):
         eq_stabile1.append([N_eq,A_eq])
     else:
         saddle1.append([N_eq,A_eq])
+
 print ('Eq stabile1:', eq_stabile1)
 print ('Sella1:', saddle1)
 print ('Eq stabile2:', eq_stabile2)
 print ('Sella2:', saddle2)
 
 for beta3_val in beta3_vals:
-    a, b, c, beta1_th, beta3_th, Delta, eta, beta1_th_delta, beta3_th_delta = compute_variables(beta3_val, parameters)
+    a, b, c, beta1_th, beta3_th, Delta, eta, beta1_th_delta, beta3_th_delta = compute_variables(beta3_val, beta1 , parameters)
     print("beta1_th_delta: ",beta1_th_delta)
     print("beta3_th_delta: ",beta3_th_delta)
     print("beta1_th: ",beta1_th)
@@ -130,7 +137,7 @@ for beta3_val in beta3_vals:
     print("a:", a)
     print("b: ", b)
     print("c:", c)
-    print("beta1:", parameters["beta1"])
+    print("beta1:", beta1)
     print("beta3:", beta3_val)
 
 initialconditions = [[0.0, 0.0],
@@ -163,7 +170,7 @@ for (N_eq, A_eq) in equilibrium_2:
         plt.scatter(N_eq/1e8, A_eq/1e8, marker='*', color='blue')
 
 for y0 in initialconditions:
-    sol = simulatecase1(beta3_vals[1], parameters, y0, tmax=2000)
+    sol = simulatecase1(beta3_vals[1], beta1, parameters, y0, tmax=2000)
     plt.plot(sol.y[0]/1e8, sol.y[1]/1e8, color='grey', alpha=0.3)
 plt.scatter([], [], marker='o', color='red', label='Equilibrio stabile')
 plt.scatter([], [], marker='*', color='blue', label='Equilibrio instabile')
@@ -188,7 +195,7 @@ for (N_eq,A_eq) in equilibrium_1:
         plt.scatter(N_eq/1e8, A_eq/1e8, marker='*', color='blue')
 
 for y0 in initialconditions:
-    sol = simulatecase1(beta3_vals[0], parameters, y0, tmax=2000)
+    sol = simulatecase1(beta3_vals[0], beta1, parameters, y0, tmax=2000)
     plt.plot(sol.y[0]/1e8, sol.y[1]/1e8, color='grey', alpha=0.3)
 plt.scatter([], [], marker='o', color='red', label='Equilibrio stabile')
 plt.scatter([], [], marker='*', color='blue', label='Equilibrio instabile')
@@ -202,7 +209,7 @@ plt.ylabel("Cells/1e8")
 plt.title('Regime II')
 #Facciamo una prova (con equilibrium 1 e 2 non va)
 for y0 in initialconditionsA:
-    sol = simulatecase1(beta3_vals[1], parameters, y0, tmax=8000)
+    sol = simulatecase1(beta3_vals[1], beta1, parameters, y0, tmax=8000)
     plt.plot(sol.t, sol.y[0]/1e8, color='orange')
     plt.plot(sol.t, sol.y[1]/1e8, color='green')
 plt.scatter([], [], color='orange', label='Sane')
@@ -216,7 +223,7 @@ plt.xlabel('Time')
 plt.ylabel("Cells/1e8")
 plt.title('Regime III')
 for y0 in initialconditionsB:
-    sol = simulatecase1(beta3_vals[0], parameters, y0, tmax=8000)
+    sol = simulatecase1(beta3_vals[0], beta1, parameters, y0, tmax=8000)
     plt.plot(sol.t, sol.y[0]/1e8, color='orange')
     plt.plot(sol.t, sol.y[1]/1e8, color='green')
 plt.scatter([], [], color='orange', label='Sane')
@@ -261,9 +268,10 @@ def ODE2(t, y, p, n, sigma=0.5):
     dDdt = v + u - plocal["gammaN"] * N * D - plocal["gammaA"] * A * D - plocal["tau"] * D
     return [dNdt, dAdt, dDdt]
 
-def simulatecase2 (beta3_val, p, y0, tmax, n, sigma=0.5):
+def simulatecase2 (beta3_val, beta1_val, p, y0, tmax, n, sigma=0.5):
     plocal = p.copy()
     plocal["beta3"] = beta3_val
+    plocal["beta1"] = beta1_val
     y = y0.copy()
     pulse_times = np.array([i * T for i in range(1, n+1) if i * T <= tmax])
     base_eval = np.linspace(0, tmax, int(max(3000, tmax * 200)))
@@ -280,17 +288,19 @@ def simulatecase2 (beta3_val, p, y0, tmax, n, sigma=0.5):
                     rtol=1e-6, atol=1e-9)
     return sol.t, sol.y.T
 
-P2 = equilibrium_2[2]
+D0 = 0.0
+
+P2 = max(equilibrium_2, key=lambda x:x[1])
 N0II = P2[0]
 A0II = P2[1]
-D0II = 0.0
-y0_II = [N0II, A0II, D0II]
 
-P3 = equilibrium_1[1]
+y0_II = [N0II, A0II, D0]
+
+P3 = max(equilibrium_1, key=lambda x:x[1])
 N0III = P3[0]
 A0III = P3[1]
-D0III = 0.0
-y0_III = [N0III, A0III, D0III]
+
+y0_III = [N0III, A0III, D0]
 line_styles_dict = {4: '-', 5: '--', 6: ':', 7: '-.'}
 
 plt.figure(figsize=(12, 5))
@@ -300,7 +310,7 @@ plt.title('Regime II')
 plt.xlabel('Time')
 plt.ylabel('Cells')
 for n in doses:
-    sol_tII, sol_yII = simulatecase2(beta3_vals[1], parameters, y0_II, tmax=150, n=n, sigma=0.5)
+    sol_tII, sol_yII = simulatecase2(beta3_vals[1], beta1, parameters, y0_II, tmax=150, n=n, sigma=0.5)
     #print("min(D)=", sol_yII[2, :].min(), "max(D)=", sol_yII[2, :].max(), "num_points=", len(sol_tII))
     style = line_styles_dict.get(n, '-')
     plt.plot(sol_tII, sol_yII[:, 0] / 1e8, color='green', linestyle=style, label='N')
@@ -313,7 +323,7 @@ plt.title('Regime III')
 plt.xlabel('Time')
 plt.ylabel('Cells')
 for n in doses:
-    sol_tIII, sol_yIII = simulatecase2(beta3_vals[0], parameters, y0_III, tmax=150, n=n, sigma=0.5)
+    sol_tIII, sol_yIII = simulatecase2(beta3_vals[0], beta1, parameters, y0_III, tmax=150, n=n, sigma=0.5)
     style = line_styles_dict.get(n, '-')
     plt.plot(sol_tIII/7, sol_yIII[:, 0] / 1e8, color='green', linestyle=style)
     plt.plot(sol_tIII/7, 4 * sol_yIII[:, 1] / 1e8, color='red', linestyle=style)
@@ -332,7 +342,7 @@ plt.title('Regime II')
 plt.xlabel('Time(years)')
 plt.ylabel('Cells')
 for n in doses:
-    sol_tII, sol_yII = simulatecase2(beta3_vals[1], parameters, y0_II, tmax=7300, n=n, sigma=0.5)
+    sol_tII, sol_yII = simulatecase2(beta3_vals[1], beta1, parameters, y0_II, tmax=7300, n=n, sigma=0.5)
     style = line_styles_dict.get(n,'-')
     plt.plot(sol_tII/365, sol_yII[:, 0] / 1e8, color='green', linestyle=style)
     plt.plot(sol_tII/365, 4 * sol_yII[:, 1] / 1e8, color='red', linestyle=style)
@@ -343,7 +353,7 @@ plt.title('Regime III')
 plt.xlabel('Time(years)')
 plt.ylabel('Cells')
 for n in doses:
-    sol_tIII, sol_yIII = simulatecase2(beta3_vals[0], parameters, y0_III, tmax=7300, n=n, sigma=0.5)
+    sol_tIII, sol_yIII = simulatecase2(beta3_vals[0], beta1, parameters, y0_III, tmax=7300, n=n, sigma=0.5)
     style = line_styles_dict.get(n,'-')
     plt.plot(sol_tIII/365, sol_yIII[:, 0] / 1e8, color='green', linestyle=style)
     plt.plot(sol_tIII/365, 4 * sol_yIII[:, 1] / 1e8, color='red', linestyle=style)
@@ -356,41 +366,70 @@ plt.tight_layout()
 plt.show()
 
 #Grafici di biforcazione
-def compute_bifurcation_plot(beta3_values,p, title="Diagrammi di biforcazione"):
+plt.figure(figsize=(8,5))
+
+def compute_bifurcation_plot(param_range, p, fixed_param_value, varying='beta3', subplot_index=1):
     rami = {}
-    for beta3_val in beta3_values:
-        equilibria = find_equilibria(beta3_val,p)
+    for val in param_range:
+        if varying == 'beta3':
+            beta3_val = val
+            beta1_val = fixed_param_value
+        else:
+            beta3_val = fixed_param_value
+            beta1_val = val
+
+        equilibria = find_equilibria(beta3_val, beta1_val, p)
         for i, eq in enumerate(equilibria):
             N_eq, A_eq = eq
-            plocal=p.copy()
+            plocal= p.copy()
             plocal["beta3"] = beta3_val
+            plocal["beta1"] = beta1_val
             J, vals, vect = Jacobian_equilibria(N_eq, A_eq, plocal)
             stabile = np.all(np.real(vals)< 0)
-            if i not in rami:
-                rami[i]=[]
-            rami[i].append((beta3_val, A_eq, stabile))
+            rami.setdefault(i, []).append((val, A_eq, stabile))
+            #if i not in rami:
+             #   rami[i]=[]
+            #rami[i].append((beta3_val, A_eq, stabile))
 
-    color_list=['blue','red', 'green']
+    color_list=['blue', 'red', 'green']
+    A_means = [(i, np.mean(np.array(ramo)[:,1])) for i, ramo in rami.items()]
 
-    plt.figure(figsize=(8,5))
-    plt.subplot(2,2,1)
+    #for i,ramo in rami.items():
+     #   ramo_array = np.array(ramo)
+     #   A_mean = np.mean(ramo_array[:,1])
+     #   A_means.append((i, A_mean))
+    A_means.sort(key=lambda x: x[1])
+
+    color_map = {i_ramo: color_list[j % len(color_list)] for j, (i_ramo, _) in enumerate(A_means)}
+
+    plt.subplot(2,2,subplot_index)
     for i, ramo in rami.items():
         ramo_array = np.array(ramo)
-        beta3_vals = ramo_array[:,0]*1e9
+        x_vals = ramo_array[:,0]*1e9
         A_vals = ramo_array[:,1]/1e8
-        stabile_mask =ramo_array[:,2].astype(bool)
-        color=color_list[i%len(color_list)]
-        plt.plot(beta3_vals[stabile_mask], A_vals[stabile_mask], color=color, linestyle='-')
-        plt.plot(beta3_vals[~stabile_mask], A_vals[~stabile_mask], color=color, linestyle='--')
+        stabile_mask=ramo_array[:,2].astype(bool)
+        color=color_map[i]
+        plt.plot(x_vals[stabile_mask], A_vals[stabile_mask], color=color, linestyle='-')
+        plt.plot(x_vals[~stabile_mask], A_vals[~stabile_mask], color=color, linestyle='--')
 
-    plt.xlabel("beta3")
+    plt.xlabel(varying)
     plt.ylabel("A all'equilibrio")
-    plt.axvline(beta3_th*1e9, color='grey', linestyle='--', linewidth=2)
-    plt.axvline(beta3_th_delta*1e9, color='grey', linestyle='--', linewidth=2)
-
+    a, b, c, beta1_th, beta3_th, Delta, eta, beta1_th_delta, beta3_th_delta = compute_variables(beta3_val, beta1_val, p)
+    if varying == 'beta3':
+        plt.axvline(beta3_th*1e9, color='grey', linestyle='--', linewidth=2)
+        plt.axvline(beta3_th_delta*1e9, color='grey', linestyle='--', linewidth=2)
+    else:
+        plt.axvline(beta1_th * 1e9, color='grey', linestyle='--', linewidth=2)
+        plt.axvline(beta1_th_delta * 1e9, color='grey', linestyle='--', linewidth=2)
 
 beta3_range = np.linspace(0.25e-9, 0.35e-9, 100)
-compute_bifurcation_plot(beta3_range, parameters, title="Diagramma di biforcazione")
-
-
+compute_bifurcation_plot(beta3_range, parameters, fixed_param_value = 0.2e-9, varying='beta3', subplot_index=1)
+compute_bifurcation_plot(beta3_range, parameters, fixed_param_value = 0.4e-9, varying='beta3', subplot_index=2)
+beta1_range = np.linspace(0.15e-9, 0.45e-9, 100)
+compute_bifurcation_plot(beta1_range, parameters, fixed_param_value=beta3_vals[0], varying="beta1", subplot_index=3)
+compute_bifurcation_plot(beta1_range, parameters, fixed_param_value=beta3_vals[1], varying="beta1", subplot_index=4)
+plt.scatter([], [], color='red', label='P2')
+plt.scatter([], [], color='green', label='P1')
+plt.scatter([], [], color='blue', label='P0')
+plt.legend()
 plt.show()

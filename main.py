@@ -1,6 +1,5 @@
 import numpy as np
 from scipy.integrate import solve_ivp
-from scipy.optimize import fsolve
 from numpy.linalg import eig
 import matplotlib.pyplot as plt
 
@@ -12,7 +11,6 @@ parameters = {
     "KA": 0.75e8,
     "miA": 0.01,
     "epsilonA": 0.01,
-    #"beta1": 0.4e-9,
     #Parametri chemioterapici
     "alphaA": 0.5e8,
     "gammaA": 0.3e-8,
@@ -149,9 +147,10 @@ initialconditions = [[0.0, 0.0],
 N0 = parameters["rN"]/parameters["miN"]
 initialconditionsA = [[N0 - 0.6e8, 0.6e8], [N0 - 0.07e8, 0.07e8], [N0 - 0.9e8, 0.9e8]]
 initialconditionsB = [[N0 - 1, 1], [N0 - 0.07e8, 0.07e8]]
+
 plt.figure(figsize=(10, 4))
 
-plt.subplot(2, 2, 1)
+plt.subplot(1, 2, 1)
 plt.grid()
 plt.xlabel('Normal cell/1e8')
 plt.ylabel('Cancer cell/1e8')
@@ -176,7 +175,7 @@ plt.scatter([], [], marker='o', color='red', label='Equilibrio stabile')
 plt.scatter([], [], marker='*', color='blue', label='Equilibrio instabile')
 plt.legend()
 
-plt.subplot(2, 2, 2)
+plt.subplot(1, 2, 2)
 plt.grid()
 plt.xlabel('Normal cell/1e8')
 plt.ylabel('Cancer cell/1e8')
@@ -201,13 +200,16 @@ plt.scatter([], [], marker='o', color='red', label='Equilibrio stabile')
 plt.scatter([], [], marker='*', color='blue', label='Equilibrio instabile')
 plt.legend()
 plt.tight_layout()
+plt.savefig("grafico_2.png", bbox_inches='tight')
+plt.show()
 
-plt.subplot(2, 2, 3)
+plt.figure(figsize=(10,6))
+plt.subplot(1, 2, 1)
 plt.grid()
 plt.xlabel('Time')
 plt.ylabel("Cells/1e8")
 plt.title('Regime II')
-#Facciamo una prova (con equilibrium 1 e 2 non va)
+
 for y0 in initialconditionsA:
     sol = simulatecase1(beta3_vals[1], beta1, parameters, y0, tmax=8000)
     plt.plot(sol.t, sol.y[0]/1e8, color='orange')
@@ -217,7 +219,7 @@ plt.scatter([], [], color='green', label='Cancer')
 plt.legend()
 plt.tight_layout()
 
-plt.subplot(2, 2, 4)
+plt.subplot(1, 2, 2)
 plt.grid()
 plt.xlabel('Time')
 plt.ylabel("Cells/1e8")
@@ -250,7 +252,7 @@ def v_pulse(t, n, T, rho, sigma=0.5):
 def u_pulse(t, n, T, rho, sigma=0.5, delay=365):
     u = 0.0
     for i in range(1, n+1):
-        center = 5 * delay + i * T
+        center = 1 * delay + i * T
         u += rho * delta_approx(t, center, sigma=sigma)
     return u
 
@@ -265,7 +267,7 @@ def ODE2(t, y, p, n, sigma=0.5):
     u = u_pulse(t, n, T, rho, sigma=sigma, delay=365)
     dNdt = plocal["rN"] - plocal["miN"] * N - plocal["beta1"] * N * A - plocal["alphaN"] * plocal["gammaN"] * N * D
     dAdt = plocal["rA"] * A * (1 - A / plocal["KA"]) - plocal["beta3"] * N * A - (plocal["miA"] + plocal["epsilonA"]) * A - plocal["alphaA"] * plocal ["gammaA"] * A * D
-    dDdt = v + u - plocal["gammaN"] * N * D - plocal["gammaA"] * A * D - plocal["tau"] * D
+    dDdt = v - plocal["gammaN"] * N * D - plocal["gammaA"] * A * D - plocal["tau"] * D
     return [dNdt, dAdt, dDdt]
 
 def simulatecase2 (beta3_val, beta1_val, p, y0, tmax, n, sigma=0.5):
@@ -277,8 +279,8 @@ def simulatecase2 (beta3_val, beta1_val, p, y0, tmax, n, sigma=0.5):
     base_eval = np.linspace(0, tmax, int(max(3000, tmax * 200)))
     t_eval=np.unique(np.concatenate([base_eval, pulse_times]))
     if pulse_times.size> 0:
-        dt = np.diff(t_eval).min() if t_eval.size > 1 else 1e-3
-        eps = max(dt * 0.2, min(0.01, dt))
+        dt= np.diff(t_eval).min() if t_eval.size>1 else 1e-3
+        eps = max(dt*0.2, min(0.01,dt))
         extra = np.unique(np.concatenate([pulse_times - eps, pulse_times + eps]))
         t_eval = np.unique(np.concatenate([t_eval, extra]))
     sol = solve_ivp(fun=lambda t, y:ODE2(t, y, plocal, n), y0=y,
@@ -306,21 +308,41 @@ line_styles_dict = {4: '-', 5: '--', 6: ':', 7: '-.'}
 plt.figure(figsize=(12, 5))
 plt.subplot(1, 2, 1)
 plt.grid()
-plt.title('Regime II')
-plt.xlabel('Time')
+plt.title("Regime II")
+plt.xlabel('Time(weeks)')
 plt.ylabel('Cells')
 for n in doses:
     sol_tII, sol_yII = simulatecase2(beta3_vals[1], beta1, parameters, y0_II, tmax=150, n=n, sigma=0.5)
-    #print("min(D)=", sol_yII[2, :].min(), "max(D)=", sol_yII[2, :].max(), "num_points=", len(sol_tII))
     style = line_styles_dict.get(n, '-')
-    plt.plot(sol_tII, sol_yII[:, 0] / 1e8, color='green', linestyle=style, label='N')
-    plt.plot(sol_tII, 4 * sol_yII[:, 1] / 1e8, color='red', linestyle=style, label='A')
-    plt.plot(sol_tII, sol_yII[:, 2] / 10, color='blue', linestyle=style, label='D')
+    plt.plot(sol_tII/7, sol_yII[:, 0] / 1e8, color='green', linestyle=style, label='N')
+    plt.plot(sol_tII/7, 4 * sol_yII[:, 1] / 1e8, color='red', linestyle=style, label='A')
+    plt.plot(sol_tII/7, sol_yII[:, 2] / 10, color='blue', linestyle=style, label='D')
 
 plt.subplot(1, 2, 2)
 plt.grid()
-plt.title('Regime III')
-plt.xlabel('Time')
+plt.title("Regime II")
+plt.xlabel('Time(years)')
+plt.ylabel('Cells')
+for n in doses:
+    sol_tII, sol_yII = simulatecase2(beta3_vals[1], beta1, parameters, y0_II, tmax=7300, n=n, sigma=0.5)
+    style = line_styles_dict.get(n, '-')
+    plt.plot(sol_tII / 365, sol_yII[:, 0] / 1e8, color='green', linestyle=style)
+    plt.plot(sol_tII / 365, 4 * sol_yII[:, 1] / 1e8, color='red', linestyle=style)
+    plt.plot(sol_tII / 365, sol_yII[:, 2] / 10, color='blue', linestyle=style)
+plt.scatter([], [], color='green', label='Sane')
+plt.scatter([], [], color='red', label='Cancer')
+plt.scatter([], [], color='blue', label='Drug')
+
+plt.legend(loc='upper right')
+plt.tight_layout()
+plt.savefig("grafico_5.png", bbox_inches='tight')
+plt.show()
+
+plt.figure(figsize=(12, 5))
+plt.subplot(1, 2, 1)
+plt.grid()
+plt.title("Regime III")
+plt.xlabel('Time(weeks)')
 plt.ylabel('Cells')
 for n in doses:
     sol_tIII, sol_yIII = simulatecase2(beta3_vals[0], beta1, parameters, y0_III, tmax=150, n=n, sigma=0.5)
@@ -331,25 +353,29 @@ for n in doses:
 plt.scatter([], [], color='green', label='Sane')
 plt.scatter([], [], color='red', label='Cancer')
 plt.scatter([], [], color='blue', label='Drug')
-plt.legend()
-plt.tight_layout()
-plt.show()
 
-plt.figure(figsize=(12, 5))
-plt.subplot(1, 2, 1)
+plt.subplot(1,2,2)
+plt.title("Regime III")
 plt.grid()
-plt.title('Regime II')
 plt.xlabel('Time(years)')
 plt.ylabel('Cells')
 for n in doses:
-    sol_tII, sol_yII = simulatecase2(beta3_vals[1], beta1, parameters, y0_II, tmax=7300, n=n, sigma=0.5)
+    sol_tIII, sol_yIII = simulatecase2(beta3_vals[0], beta1, parameters, y0_III, tmax=1825, n=n, sigma=0.5)
     style = line_styles_dict.get(n,'-')
-    plt.plot(sol_tII/365, sol_yII[:, 0] / 1e8, color='green', linestyle=style)
-    plt.plot(sol_tII/365, 4 * sol_yII[:, 1] / 1e8, color='red', linestyle=style)
-    plt.plot(sol_tII/365, sol_yII[:, 2] / 10, color='blue', linestyle=style)
-plt.subplot(1, 2, 2)
+    plt.plot(sol_tIII/365, sol_yIII[:, 0] / 1e8, color='green', linestyle=style)
+    plt.plot(sol_tIII/365, 4 * sol_yIII[:, 1] / 1e8, color='red', linestyle=style)
+    plt.plot(sol_tIII/365, sol_yIII[:, 2] / 10, color='blue', linestyle=style)
+plt.scatter([], [], color='green', label='Sane')
+plt.scatter([], [], color='red', label='Cancer')
+plt.scatter([], [], color='blue', label='Drug')
+plt.legend(loc='upper right')
+plt.tight_layout()
+plt.savefig("grafico_6.png", bbox_inches='tight')
+plt.show()
+
+plt.figure(figsize=(12,5))
+plt.title("Regime III")
 plt.grid()
-plt.title('Regime III')
 plt.xlabel('Time(years)')
 plt.ylabel('Cells')
 for n in doses:
@@ -363,6 +389,7 @@ plt.scatter([], [], color='red', label='Cancer')
 plt.scatter([], [], color='blue', label='Drug')
 plt.legend(loc='upper right')
 plt.tight_layout()
+plt.savefig("grafico_9.png", bbox_inches='tight')
 plt.show()
 
 #Grafici di biforcazione
@@ -379,6 +406,7 @@ def compute_bifurcation_plot(param_range, p, fixed_param_value, varying='beta3',
             beta1_val = val
 
         equilibria = find_equilibria(beta3_val, beta1_val, p)
+
         for i, eq in enumerate(equilibria):
             N_eq, A_eq = eq
             plocal= p.copy()
@@ -387,17 +415,10 @@ def compute_bifurcation_plot(param_range, p, fixed_param_value, varying='beta3',
             J, vals, vect = Jacobian_equilibria(N_eq, A_eq, plocal)
             stabile = np.all(np.real(vals)< 0)
             rami.setdefault(i, []).append((val, A_eq, stabile))
-            #if i not in rami:
-             #   rami[i]=[]
-            #rami[i].append((beta3_val, A_eq, stabile))
+
 
     color_list=['blue', 'red', 'green']
     A_means = [(i, np.mean(np.array(ramo)[:,1])) for i, ramo in rami.items()]
-
-    #for i,ramo in rami.items():
-     #   ramo_array = np.array(ramo)
-     #   A_mean = np.mean(ramo_array[:,1])
-     #   A_means.append((i, A_mean))
     A_means.sort(key=lambda x: x[1])
 
     color_map = {i_ramo: color_list[j % len(color_list)] for j, (i_ramo, _) in enumerate(A_means)}
@@ -432,4 +453,113 @@ plt.scatter([], [], color='red', label='P2')
 plt.scatter([], [], color='green', label='P1')
 plt.scatter([], [], color='blue', label='P0')
 plt.legend()
+plt.savefig("grafico_8.png", bbox_inches='tight')
+plt.show()
+
+plt.figure(figsize=(10,5))
+
+beta1_curve=[]
+beta3_vec= np.linspace(0.0, 4.0e-9, 200)
+
+for beta3_val in beta3_vec:
+    a, b, c, beta1_th, beta3_th, Delta, eta, beta1_th_delta, beta3_th_delta = compute_variables(beta3_val=beta3_val,beta1_val=0.4e-9,p=parameters)
+    beta1_curve.append(beta1_th_delta)
+
+plt.plot(np.array(beta3_vec)*1e9, np.array(beta1_curve)*1e9, color='grey', linewidth=2, linestyle=':', label=r'SN$(P_1,P_2)$')
+
+plt.axvline(beta3_th*1e9, color='grey', linestyle='--', label=r'$\beta_{1,th}$')
+plt.axhline(beta1_th*1e9, color='grey', linestyle='-.', label=r'$\beta_{3,th}$')
+
+plt.text(beta3_th*1e9+0.02, 0.01, r'$\beta_3=\beta_3^{th}$', fontsize=12, ha='left', va='bottom')
+plt.text(0.05, beta1_th*1e9+0.05, r'$\beta_1=\beta_1^{th}$', fontsize=12, ha='left', va='bottom')
+
+plt.text(0.2, 1 , f"III\n$P_2$ GAS", fontsize=14, ha='center', va='center', multialignment='center')
+plt.text(0.6, 0.5, f"I\n$P_0$ GAS", fontsize=14, ha='center', va='center', multialignment='center')
+plt.text(0.4, 1.5, f"II\n$P_0,P_2$ LAS", fontsize=14, ha='center', va='center', multialignment='center')
+
+plt.annotate(f'TC($P_0,P_2$)', xy=(0.3, 0.1), xytext=(0.1,0.1), arrowprops=dict(arrowstyle='->', color='black'), fontsize=12)
+plt.annotate(f'SN($P_1,P_2$)', xy=(0.8,1.9), xytext=(0.8, 1.5), arrowprops=dict(arrowstyle='->', color='black'), fontsize=12)
+plt.annotate(f'TC($P_0,P_1$)', xy=(0.3,1.75), xytext=(0.15, 1.5), arrowprops=dict(arrowstyle='->', color='black'), fontsize=12)
+plt.annotate(r'$\beta_1=\beta_{1,\Delta}^{th}$'+' o\n'+r'$\beta_3=\beta_{3,\Delta}^{th}$', xy = (0.7468,1.752), xytext=(0.6,1.75), arrowprops=dict(arrowstyle='->', color='black'), fontsize=12)
+plt.xlabel("β₁ (x10⁻⁹)")
+plt.ylabel("β₃ (x10⁻⁹)")
+plt.xlim(0,1)
+plt.ylim(0,2)
+plt.savefig("grafico_1.png", bbox_inches='tight')
+plt.legend()
+plt.grid(True)
+plt.tight_layout()
+plt.show()
+
+paziente1=parameters.copy()
+paziente1["epsilonA"] = 0.01
+plt.figure(figsize=(10,5))
+plt.subplot(2,3,1)
+plt.grid()
+plt.title("Paziente1")
+plt.xlabel("Time(weeks)")
+plt.ylabel("Cell/1e8")
+sol_t1, sol_y1 = simulatecase2(beta3_vals[1],0.4e-9,paziente1, y0_II, tmax=105, n=8)
+plt.plot(sol_t1/7, sol_y1[:, 0] / 1e8, color='green', linestyle='-')
+plt.plot(sol_t1/7, 4 * sol_y1[:, 1] / 1e8, color='red', linestyle='-')
+plt.plot(sol_t1/7, sol_y1[:, 2] / 10, color='blue', linestyle='-')
+
+plt.subplot(2,3,4)
+plt.grid()
+plt.title("Paziente1")
+plt.xlabel("Time(years)")
+plt.ylabel("Cell/1e8")
+sol_t1, sol_y1 = simulatecase2(beta3_vals[1],0.4e-9,paziente1, y0_II, tmax=7300, n=8)
+plt.plot(sol_t1/365, sol_y1[:, 0] / 1e8, color='green', linestyle='-')
+plt.plot(sol_t1/365, 4 * sol_y1[:, 1] / 1e8, color='red', linestyle='-')
+plt.plot(sol_t1/365, sol_y1[:, 2] / 10, color='blue', linestyle='-')
+
+paziente2=parameters.copy()
+paziente2["epsilonA"] = 0.95*0.01
+plt.subplot(2,3,2)
+plt.grid()
+plt.title("Paziente2")
+plt.xlabel("Time(weeks)")
+plt.ylabel("Cell/1e8")
+sol_t2, sol_y2 = simulatecase2(beta3_vals[1],0.4e-9,paziente2, y0_II, tmax=105, n=8)
+plt.plot(sol_t2/7, sol_y2[:, 0] / 1e8, color='green', linestyle='-')
+plt.plot(sol_t2/7, 4 * sol_y2[:, 1] / 1e8, color='red', linestyle='-')
+plt.plot(sol_t2/7, sol_y2[:, 2] / 10, color='blue', linestyle='-')
+plt.subplot(2,3,5)
+plt.grid()
+plt.title("Paziente2")
+plt.xlabel("Time(years)")
+plt.ylabel("Cell/1e8")
+sol_t2, sol_y2 = simulatecase2(beta3_vals[1],0.4e-9,paziente2, y0_II, tmax=7300, n=8)
+plt.plot(sol_t2/365, sol_y2[:, 0] / 1e8, color='green', linestyle='-')
+plt.plot(sol_t2/365, 4 * sol_y2[:, 1] / 1e8, color='red', linestyle='-')
+plt.plot(sol_t2/365, sol_y2[:, 2] / 10, color='blue', linestyle='-')
+
+paziente3=parameters.copy()
+paziente3["epsilonA"] = 0.9*0.01
+plt.subplot(2,3,3)
+plt.grid()
+plt.title("Paziente3")
+plt.xlabel("Time(weeks)")
+plt.ylabel("Cell/1e8")
+sol_t3, sol_y3 = simulatecase2(beta3_vals[1],0.4e-9,paziente3, y0_II, tmax=105, n=8)
+plt.plot(sol_t3/7, sol_y3[:, 0] / 1e8, color='green', linestyle='-')
+plt.plot(sol_t3/7, 4 * sol_y3[:, 1] / 1e8, color='red', linestyle='-')
+plt.plot(sol_t3/7, sol_y3[:, 2] / 10, color='blue', linestyle='-')
+plt.subplot(2,3,6)
+plt.grid()
+plt.title("Paziente3")
+plt.xlabel("Time(years)")
+plt.ylabel("Cell/1e8")
+sol_t3, sol_y3 = simulatecase2(beta3_vals[1],0.4e-9,paziente3, y0_II, tmax=7300, n=8)
+plt.plot(sol_t3/365, sol_y3[:, 0] / 1e8, color='green', linestyle='-')
+plt.plot(sol_t3/365, 4 * sol_y3[:, 1] / 1e8, color='red', linestyle='-')
+plt.plot(sol_t3/365, sol_y3[:, 2] / 10, color='blue', linestyle='-')
+
+plt.scatter([], [], color='green', label='Sane')
+plt.scatter([], [], color='red', label='Cancer')
+plt.scatter([], [], color='blue', label='Drug')
+plt.legend(loc='upper right')
+plt.tight_layout()
+plt.savefig("grafico_10.png", bbox_inches='tight')
 plt.show()

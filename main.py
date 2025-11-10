@@ -143,7 +143,7 @@ initialconditions = [[0.0, 0.0],
     [0.1e8, 0.2e8],[0.15e8, 0.1e8],[0.25e8, 0.05e8],[0.3e8, 0.25e8],[0.35e8, 0.15e8],[0.4e8, 0.3e8],[0.45e8, 0.4e8],
     [0.55e8, 0.1e8],[0.6e8, 0.2e8],[0.65e8, 0.35e8],[0.7e8, 0.5e8],[0.75e8, 0.2e8],[0.78e8, 0.1e8],[0.8e8, 0.25e8],
     [0.85e8, 0.4e8],[0.9e8, 0.6e8],[0.95e8, 0.3e8],[0.98e8, 0.15e8],[1.0e8, 0.1e8], [0.3e8, 0.7e8]]
-
+initialconditions_orange = [[0.0, 0.0], [0.5e8, 0.5e8], [0.75e8, 0.2e8], [0.98e8, 0.15e8], [0.6e8,0.14e8], [0.14e8, 0.6e8]]
 N0 = parameters["rN"]/parameters["miN"]
 initialconditionsA = [[N0 - 0.6e8, 0.6e8], [N0 - 0.07e8, 0.07e8], [N0 - 0.9e8, 0.9e8]]
 initialconditionsB = [[N0 - 1, 1], [N0 - 0.07e8, 0.07e8]]
@@ -171,6 +171,9 @@ for (N_eq, A_eq) in equilibrium_2:
 for y0 in initialconditions:
     sol = simulatecase1(beta3_vals[1], beta1, parameters, y0, tmax=2000)
     plt.plot(sol.y[0]/1e8, sol.y[1]/1e8, color='grey', alpha=0.3)
+for y0 in initialconditions_orange:
+    sol = simulatecase1(beta3_vals[1], beta1, parameters, y0, tmax=2000)
+    plt.plot(sol.y[0]/1e8, sol.y[1]/1e8, color='orange', alpha=0.3)
 plt.scatter([], [], marker='o', color='red', label='Equilibrio stabile')
 plt.scatter([], [], marker='*', color='blue', label='Equilibrio instabile')
 plt.legend()
@@ -196,11 +199,14 @@ for (N_eq,A_eq) in equilibrium_1:
 for y0 in initialconditions:
     sol = simulatecase1(beta3_vals[0], beta1, parameters, y0, tmax=2000)
     plt.plot(sol.y[0]/1e8, sol.y[1]/1e8, color='grey', alpha=0.3)
+for y0 in initialconditions_orange:
+    sol = simulatecase1(beta3_vals[1], beta1, parameters, y0, tmax=2000)
+    plt.plot(sol.y[0]/1e8, sol.y[1]/1e8, color='orange', alpha=0.3)
 plt.scatter([], [], marker='o', color='red', label='Equilibrio stabile')
 plt.scatter([], [], marker='*', color='blue', label='Equilibrio instabile')
 plt.legend()
 plt.tight_layout()
-plt.savefig("grafico_2.png", bbox_inches='tight')
+plt.savefig("grafico_1.png", bbox_inches='tight')
 plt.show()
 
 plt.figure(figsize=(10,6))
@@ -335,7 +341,7 @@ plt.scatter([], [], color='blue', label='Drug')
 
 plt.legend(loc='upper right')
 plt.tight_layout()
-plt.savefig("grafico_5.png", bbox_inches='tight')
+plt.savefig("grafico_2.png", bbox_inches='tight')
 plt.show()
 
 plt.figure(figsize=(12, 5))
@@ -370,7 +376,7 @@ plt.scatter([], [], color='red', label='Cancer')
 plt.scatter([], [], color='blue', label='Drug')
 plt.legend(loc='upper right')
 plt.tight_layout()
-plt.savefig("grafico_6.png", bbox_inches='tight')
+plt.savefig("grafico_3.png", bbox_inches='tight')
 plt.show()
 
 plt.figure(figsize=(12,5))
@@ -389,14 +395,17 @@ plt.scatter([], [], color='red', label='Cancer')
 plt.scatter([], [], color='blue', label='Drug')
 plt.legend(loc='upper right')
 plt.tight_layout()
-plt.savefig("grafico_9.png", bbox_inches='tight')
+plt.savefig("grafico_4.png", bbox_inches='tight')
 plt.show()
 
 #Grafici di biforcazione
 plt.figure(figsize=(8,5))
 
 def compute_bifurcation_plot(param_range, p, fixed_param_value, varying='beta3', subplot_index=1):
-    rami = {}
+    rami = {'blue' : [], 'green' :[], 'red': []}
+
+    plt.subplot(2,2,subplot_index)
+
     for val in param_range:
         if varying == 'beta3':
             beta3_val = val
@@ -406,30 +415,37 @@ def compute_bifurcation_plot(param_range, p, fixed_param_value, varying='beta3',
             beta1_val = val
 
         equilibria = find_equilibria(beta3_val, beta1_val, p)
+        equilibria_sorted = sorted(equilibria, key = lambda x : x[1])
+        l = len(equilibria)
 
-        for i, eq in enumerate(equilibria):
+        for i, eq in enumerate(equilibria_sorted):
             N_eq, A_eq = eq
             plocal= p.copy()
             plocal["beta3"] = beta3_val
             plocal["beta1"] = beta1_val
             J, vals, vect = Jacobian_equilibria(N_eq, A_eq, plocal)
+
             stabile = np.all(np.real(vals)< 0)
-            rami.setdefault(i, []).append((val, A_eq, stabile))
+            if l == 1:
+                rami['blue'].append((val, A_eq, stabile))
+            elif l == 2:
+                rami['blue'].append((val, equilibria_sorted[0][1],
+                                     np.all(np.real(Jacobian_equilibria(*equilibria_sorted[0], plocal)[1]) < 0)))
+                rami['red'].append((val, equilibria_sorted[1][1],
+                                    np.all(np.real(Jacobian_equilibria(*equilibria_sorted[1], plocal)[1]) < 0)))
+            else:
+                rami['blue'].append((val, equilibria_sorted[0][1],
+                                     np.all(np.real(Jacobian_equilibria(*equilibria_sorted[0], plocal)[1]) < 0)))
+                rami['green'].append((val, equilibria_sorted[1][1],
+                                      np.all(np.real(Jacobian_equilibria(*equilibria_sorted[1], plocal)[1]) < 0)))
+                rami['red'].append((val, equilibria_sorted[2][1],
+                                    np.all(np.real(Jacobian_equilibria(*equilibria_sorted[2], plocal)[1]) < 0)))
 
+    for color, ramo in rami.items():
+        x_vals = np.array([r[0] for r in ramo], dtype=float)*1e9
+        A_vals = np.array([r[1] for r in ramo], dtype=float)/1e8
+        stabile_mask=np.array([r[2] for r in ramo], dtype= bool)
 
-    color_list=['blue', 'red', 'green']
-    A_means = [(i, np.mean(np.array(ramo)[:,1])) for i, ramo in rami.items()]
-    A_means.sort(key=lambda x: x[1])
-
-    color_map = {i_ramo: color_list[j % len(color_list)] for j, (i_ramo, _) in enumerate(A_means)}
-
-    plt.subplot(2,2,subplot_index)
-    for i, ramo in rami.items():
-        ramo_array = np.array(ramo)
-        x_vals = ramo_array[:,0]*1e9
-        A_vals = ramo_array[:,1]/1e8
-        stabile_mask=ramo_array[:,2].astype(bool)
-        color=color_map[i]
         plt.plot(x_vals[stabile_mask], A_vals[stabile_mask], color=color, linestyle='-')
         plt.plot(x_vals[~stabile_mask], A_vals[~stabile_mask], color=color, linestyle='--')
 
@@ -438,22 +454,41 @@ def compute_bifurcation_plot(param_range, p, fixed_param_value, varying='beta3',
     a, b, c, beta1_th, beta3_th, Delta, eta, beta1_th_delta, beta3_th_delta = compute_variables(beta3_val, beta1_val, p)
     if varying == 'beta3':
         plt.axvline(beta3_th*1e9, color='grey', linestyle='--', linewidth=2)
-        plt.axvline(beta3_th_delta*1e9, color='grey', linestyle='--', linewidth=2)
+        plt.text(beta3_th*1e9,0, r'$\beta_3^{th}$')
+        if not np.isnan(beta3_th_delta):
+            plt.axvline(beta3_th_delta*1e9, color='grey', linestyle='--', linewidth=2)
+            plt.text(beta3_th_delta*1e9,0, r'$\beta_{3,\Delta}^{th}$')
     else:
         plt.axvline(beta1_th * 1e9, color='grey', linestyle='--', linewidth=2)
-        plt.axvline(beta1_th_delta * 1e9, color='grey', linestyle='--', linewidth=2)
+        plt.text(beta1_th * 1e9,0, r'$\beta_1^{th}$')
+        if not np.isnan(beta1_th_delta):
+            plt.axvline(beta1_th_delta * 1e9, color='grey', linestyle='--', linewidth=2)
+            plt.text(beta1_th_delta * 1e9,0, r'$\beta_{1,\Delta}^{th}$')
 
-beta3_range = np.linspace(0.25e-9, 0.35e-9, 100)
+beta3_range = np.linspace(0.25e-9, 0.35e-9, 1000)
 compute_bifurcation_plot(beta3_range, parameters, fixed_param_value = 0.2e-9, varying='beta3', subplot_index=1)
+plt.scatter([], [], color='red', label='P2')
+plt.scatter([], [], color='green', label='P1')
+plt.scatter([], [], color='blue', label='P0')
+plt.legend()
 compute_bifurcation_plot(beta3_range, parameters, fixed_param_value = 0.4e-9, varying='beta3', subplot_index=2)
-beta1_range = np.linspace(0.15e-9, 0.45e-9, 100)
+plt.scatter([], [], color='red', label='P2')
+plt.scatter([], [], color='green', label='P1')
+plt.scatter([], [], color='blue', label='P0')
+plt.legend()
+beta1_range = np.linspace(0.15e-9, 0.45e-9, 1000)
 compute_bifurcation_plot(beta1_range, parameters, fixed_param_value=beta3_vals[0], varying="beta1", subplot_index=3)
+plt.scatter([], [], color='red', label='P2')
+plt.scatter([], [], color='green', label='P1')
+plt.scatter([], [], color='blue', label='P0')
+plt.legend()
 compute_bifurcation_plot(beta1_range, parameters, fixed_param_value=beta3_vals[1], varying="beta1", subplot_index=4)
 plt.scatter([], [], color='red', label='P2')
 plt.scatter([], [], color='green', label='P1')
 plt.scatter([], [], color='blue', label='P0')
 plt.legend()
-plt.savefig("grafico_8.png", bbox_inches='tight')
+plt.tight_layout(pad=3.0) 
+plt.savefig("grafico_5.png", bbox_inches='tight')
 plt.show()
 
 plt.figure(figsize=(10,5))
@@ -485,7 +520,7 @@ plt.xlabel("β₁ (x10⁻⁹)")
 plt.ylabel("β₃ (x10⁻⁹)")
 plt.xlim(0,1)
 plt.ylim(0,2)
-plt.savefig("grafico_1.png", bbox_inches='tight')
+plt.savefig("grafico_6.png", bbox_inches='tight')
 plt.legend()
 plt.grid(True)
 plt.tight_layout()
@@ -561,5 +596,57 @@ plt.scatter([], [], color='red', label='Cancer')
 plt.scatter([], [], color='blue', label='Drug')
 plt.legend(loc='upper right')
 plt.tight_layout()
-plt.savefig("grafico_10.png", bbox_inches='tight')
+plt.savefig("grafico_7.png", bbox_inches='tight')
+plt.show()
+
+initialconditions_withchem =[[0.0, 0.0, 0.0],[0.98e8, 0.15e8, 0.0], [0.6e8,0.14e8, 0.0], [0.14e8, 0.6e8, 0.0]]
+
+plt.figure(figsize=(10,5))
+
+plt.subplot(1,2,1)
+plt.title("Regime II")
+plt.grid()
+
+for (N_eq, A_eq) in equilibrium_2:
+    stabile = any(
+        np.isclose(Ns, N_eq, rtol=1e-5, atol=1e-8)
+        and
+        np.isclose(As, A_eq, rtol=1e-5, atol=1e-8)
+        for (Ns, As) in eq_stabile2
+    )
+    if stabile:
+        plt.scatter(N_eq/1e8, A_eq/1e8, marker='o', color='red')
+    else:
+        plt.scatter(N_eq/1e8, A_eq/1e8, marker='*', color='blue')
+
+for y0 in initialconditions_withchem:
+    _, y=simulatecase2(beta3_vals[1], beta1, parameters, y0, tmax=2000, n=7, sigma=0.5)
+    plt.plot(y[:,0]/1e8, y[:,1]/1e8, color='orange', alpha = 0.3)
+plt.scatter([], [], marker='o', color='red', label='Equilibrio stabile')
+plt.scatter([], [], marker='*', color='blue', label='Equilibrio instabile')
+plt.legend(loc="upper right")
+
+plt.subplot(1,2,2)
+plt.title("Regime III")
+plt.grid()
+for (N_eq, A_eq) in equilibrium_1:
+    stabile = any(
+        np.isclose(Ns, N_eq, rtol=1e-5, atol=1e-8)
+        and
+        np.isclose(As, A_eq, rtol=1e-5, atol=1e-8)
+        for (Ns, As) in eq_stabile1
+    )
+    if stabile:
+        plt.scatter(N_eq/1e8, A_eq/1e8, marker='o', color='red')
+    else:
+        plt.scatter(N_eq/1e8, A_eq/1e8, marker='*', color='blue')
+
+for y0 in initialconditions_withchem:
+    _, y = simulatecase2(beta3_vals[0], beta1, parameters, y0, tmax=2000, n=7, sigma=0.5)
+    plt.plot(y[:, 0] / 1e8, y[:, 1] / 1e8, color='orange', alpha=0.3)
+plt.scatter([], [], marker='o', color='red', label='Equilibrio stabile')
+plt.scatter([], [], marker='*', color='blue', label='Equilibrio instabile')
+plt.legend(loc = "upper right")
+plt.tight_layout()
+plt.savefig("grafico_8.png", bbox_inches='tight')
 plt.show()

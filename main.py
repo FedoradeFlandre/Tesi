@@ -487,7 +487,7 @@ plt.scatter([], [], color='red', label='P2')
 plt.scatter([], [], color='green', label='P1')
 plt.scatter([], [], color='blue', label='P0')
 plt.legend()
-plt.tight_layout(pad=3.0) 
+plt.tight_layout(pad=3.0)
 plt.savefig("grafico_5.png", bbox_inches='tight')
 plt.show()
 
